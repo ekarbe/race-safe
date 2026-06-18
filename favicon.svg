@@ -1,0 +1,36 @@
+<!-- RaceSafe - Offline-accessible trail & ultra-run safety planner with GPX analysis & emergency SMS generator
+    Copyright (C) 2026  Eike Christian Karbe
+
+    This program is free software: you can redistribute it and/or modify
+    it under the terms of the GNU General Public License as published by
+    the Free Software Foundation, either version 3 of the License, or
+    (at your option) any later version.
+
+    This program is distributed in the hope that it will be useful,
+    but WITHOUT ANY WARRANTY; without even the implied warranty of
+    MERCHANTABILITY or FITNESS FOR A PARTICULAR PURPOSE.  See the
+    GNU General Public License for more details.
+
+    You should have received a copy of the GNU General Public License
+    along with this program.  If not, see <https://www.gnu.org/licenses/>. -->
+
+<svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 100 100" fill="none">
+  <style>
+    .stroke-main {
+      stroke: #18181b;
+      fill: none;
+    }
+    @media (prefers-color-scheme: dark) {
+      .stroke-main {
+        stroke: #f4f4f5;
+      }
+    }
+  </style>
+  <!-- Minimalist Safety Shield outline -->
+  <path class="stroke-main" d="M50,15 L80,25 L80,55 C80,72 68,83 50,88 C32,83 20,72 20,55 L20,25 Z" stroke-width="6" stroke-linecap="round" stroke-linejoin="round" />
+  <!-- Mountain crest symbol inside the shield -->
+  <path class="stroke-main" d="M32,64 L46,44 L56,56 L64,48 L70,64" stroke-width="5" stroke-linejoin="round" stroke-linecap="round" />
+  <!-- Safety plus sign in the upper half of the shield -->
+  <path class="stroke-main" d="M50,28 L50,38" stroke-width="4" stroke-linecap="round" />
+  <path class="stroke-main" d="M45,33 L55,33" stroke-width="4" stroke-linecap="round" />
+</svg>
