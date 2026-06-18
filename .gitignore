@@ -1,0 +1,32 @@
+# Node modules
+node_modules/
+
+# Production builds
+dist/
+dist-ssr/
+
+# IDE / Editor config
+.vscode/
+.idea/
+*.suo
+*.ntvs*
+*.njsproj
+*.sln
+*.sw?
+
+# OS files
+.DS_Store
+Thumbs.db
+
+# Gemini App Config & metadata
+.gemini/
+
+# Planning & specification files
+AGENT.md
+BRAINSTORM.md
+ENHANCEMENTS.md
+FEATURES.md
+ISSUES.md
+CODESTYLE.md
+PLAN.md
+PLAND.md

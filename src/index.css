@@ -1,0 +1,144 @@
+/*  RaceSafe - Offline-accessible trail & ultra-run safety planner with GPX analysis & emergency SMS generator
+    Copyright (C) 2026  Eike Christian Karbe
+
+    This program is free software: you can redistribute it and/or modify
+    it under the terms of the GNU General Public License as published by
+    the Free Software Foundation, either version 3 of the License, or
+    (at your option) any later version.
+
+    This program is distributed in the hope that it will be useful,
+    but WITHOUT ANY WARRANTY; without even the implied warranty of
+    MERCHANTABILITY or FITNESS FOR A PARTICULAR PURPOSE.  See the
+    GNU General Public License for more details.
+
+    You should have received a copy of the GNU General Public License
+    along with this program.  If not, see <https://www.gnu.org/licenses/>. */
+
+@import url('https://fonts.googleapis.com/css2?family=Inter:wght@300;400;500;600;700&display=swap');
+
+/* Import Tailwind CSS v4 */
+@import "tailwindcss";
+
+@layer base {
+  :root {
+    font-family: 'Inter', -apple-system, BlinkMacSystemFont, 'Segoe UI', Roboto, Oxygen, Ubuntu, Cantarell, 'Open Sans', 'Helvetica Neue', sans-serif;
+    -webkit-font-smoothing: antialiased;
+    -moz-osx-font-smoothing: grayscale;
+  }
+
+  body {
+    background-color: #f4f4f5; /* zinc-100 */
+    background-image: 
+      radial-gradient(at 10% 20%, rgba(228, 228, 231, 0.4) 0px, transparent 50%), 
+      radial-gradient(at 90% 80%, rgba(212, 212, 216, 0.3) 0px, transparent 50%);
+    color: #18181b; /* zinc-900 */
+    min-height: 100vh;
+    transition: background-color 0.3s cubic-bezier(0.4, 0, 0.2, 1), color 0.3s cubic-bezier(0.4, 0, 0.2, 1);
+  }
+
+  /* When the dark class is applied to the root HTML node */
+  .dark body {
+    background-color: #09090b; /* zinc-950 */
+    background-image: 
+      radial-gradient(at 10% 20%, rgba(24, 24, 27, 0.8) 0px, transparent 50%), 
+      radial-gradient(at 90% 80%, rgba(39, 39, 42, 0.4) 0px, transparent 50%);
+    color: #f4f4f5; /* zinc-100 */
+  }
+}
+
+/* Custom design system utility classes for Apple Glassmorphism */
+@layer utilities {
+  .glass-panel {
+    background-color: rgba(255, 255, 255, 0.65);
+    backdrop-filter: blur(20px);
+    -webkit-backdrop-filter: blur(20px);
+    border: 1px solid rgba(255, 255, 255, 0.4);
+    box-shadow: 
+      0 4px 6px -1px rgba(0, 0, 0, 0.02), 
+      0 2px 4px -2px rgba(0, 0, 0, 0.02),
+      inset 0 1px 0 0 rgba(255, 255, 255, 0.4);
+    transition: background-color 0.3s ease, border-color 0.3s ease, box-shadow 0.3s ease;
+  }
+
+  .glass-panel-hover:hover {
+    background-color: rgba(255, 255, 255, 0.8);
+    border-color: rgba(255, 255, 255, 0.6);
+    box-shadow: 
+      0 10px 15px -3px rgba(0, 0, 0, 0.03), 
+      0 4px 6px -4px rgba(0, 0, 0, 0.03);
+  }
+
+  .dark .glass-panel {
+    background-color: rgba(18, 18, 18, 0.6);
+    backdrop-filter: blur(20px);
+    -webkit-backdrop-filter: blur(20px);
+    border: 1px solid rgba(255, 255, 255, 0.06);
+    box-shadow: 
+      0 4px 6px -1px rgba(0, 0, 0, 0.2), 
+      0 2px 4px -2px rgba(0, 0, 0, 0.2),
+      inset 0 1px 0 0 rgba(255, 255, 255, 0.05);
+  }
+
+  .dark .glass-panel-hover:hover {
+    background-color: rgba(24, 24, 27, 0.7);
+    border-color: rgba(255, 255, 255, 0.1);
+    box-shadow: 
+      0 10px 15px -3px rgba(0, 0, 0, 0.4), 
+      0 4px 6px -4px rgba(0, 0, 0, 0.4);
+  }
+
+  /* Glass input fields */
+  .glass-input {
+    background-color: rgba(255, 255, 255, 0.5);
+    border: 1px solid rgba(0, 0, 0, 0.1);
+    border-radius: 8px;
+    padding: 0.5rem 0.75rem;
+    outline: none;
+    transition: all 0.2s ease;
+  }
+
+  .glass-input:focus {
+    background-color: rgba(255, 255, 255, 0.8);
+    border-color: rgba(0, 0, 0, 0.3);
+    box-shadow: 0 0 0 2px rgba(0, 0, 0, 0.05);
+  }
+
+  .dark .glass-input {
+    background-color: rgba(24, 24, 27, 0.4);
+    border: 1px solid rgba(255, 255, 255, 0.1);
+    color: #f4f4f5;
+  }
+
+  .dark .glass-input:focus {
+    background-color: rgba(24, 24, 27, 0.7);
+    border-color: rgba(255, 255, 255, 0.3);
+    box-shadow: 0 0 0 2px rgba(255, 255, 255, 0.05);
+  }
+}
+
+/* Custom stylized scrollbars for the checklist and charts scroll zones */
+::-webkit-scrollbar {
+  width: 6px;
+  height: 6px;
+}
+
+::-webkit-scrollbar-track {
+  background: transparent;
+}
+
+::-webkit-scrollbar-thumb {
+  background: rgba(0, 0, 0, 0.15);
+  border-radius: 9999px;
+}
+
+.dark ::-webkit-scrollbar-thumb {
+  background: rgba(255, 255, 255, 0.15);
+}
+
+::-webkit-scrollbar-thumb:hover {
+  background: rgba(0, 0, 0, 0.3);
+}
+
+.dark ::-webkit-scrollbar-thumb:hover {
+  background: rgba(255, 255, 255, 0.3);
+}
