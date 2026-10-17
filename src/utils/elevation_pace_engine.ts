@@ -23,7 +23,16 @@ export interface UserCheckpoint {
   id: string;
   name: string;
   distance_kilometers: number;
+  // Time spent at this checkpoint. Every later ETA moves back by this amount.
+  stop_minutes?: number;
+  // Local cut-off in the form "YYYY-MM-DDTHH:MM". Empty or missing means no cut-off.
+  cutoff_datetime_string?: string;
 }
+
+/**
+ * How a checkpoint compares with its cut-off.
+ */
+export type CutoffStatus = "none" | "ok" | "tight" | "missed";
 
 /**
  * Represents a checkpoint populated with calculated pace and elevation statistics.
@@ -36,8 +45,25 @@ export interface CalculatedCheckpointDetails {
   cumulative_gain_meters: number;
   cumulative_loss_meters: number;
   elapsed_time_minutes: number;
+  stop_minutes: number;
   eta_time_string: string;
+  cutoff_status: CutoffStatus;
+  slack_minutes: number | null;
 }
+
+/**
+ * The settings every calculation depends on, in metric units.
+ */
+export interface PlanSettings {
+  base_pace_minutes_per_kilometer: number;
+  ascent_penalty_minutes_per_hundred_meters: number;
+  descent_time_minutes_per_hundred_meters: number;
+  start_time_string: string;
+  race_date_string: string;
+}
+
+// A checkpoint with less slack than this is flagged as tight
+export const tight_cutoff_margin_minutes = 30;
 
 /**
  * Formats a Date object into a readable time string.
@@ -50,11 +76,11 @@ function format_timestamp_to_eta_string(
 ): string {
   const current_hours = current_time_date.getHours().toString().padStart(2, "0");
   const current_minutes = current_time_date.getMinutes().toString().padStart(2, "0");
-  
+
   // Calculate the difference in calendar days between start date and current date
   const start_date_midnight = new Date(start_time_date.getFullYear(), start_time_date.getMonth(), start_time_date.getDate());
   const current_date_midnight = new Date(current_time_date.getFullYear(), current_time_date.getMonth(), current_time_date.getDate());
-  
+
   const milliseconds_difference = current_date_midnight.getTime() - start_date_midnight.getTime();
   const milliseconds_per_day = 1000 * 60 * 60 * 24;
   const calendar_days_difference = Math.round(milliseconds_difference / milliseconds_per_day);
@@ -62,8 +88,65 @@ function format_timestamp_to_eta_string(
   if (calendar_days_difference > 0) {
     return `${current_hours}:${current_minutes} (+${calendar_days_difference}d)`;
   }
-  
+
   return `${current_hours}:${current_minutes}`;
+}
+
+/**
+ * Reads a "HH:MM" start time. Blank or unreadable input falls back to 08:00,
+ * so every calculation in the planner uses the same start time.
+ */
+function parse_start_time_parts(start_time_string: string): { hours: number; minutes: number } {
+  const default_start_time = { hours: 8, minutes: 0 };
+  const start_time_match = /^(\d{1,2}):(\d{2})$/.exec(start_time_string.trim());
+  if (!start_time_match) {
+    return default_start_time;
+  }
+
+  const hours = parseInt(start_time_match[1], 10);
+  const minutes = parseInt(start_time_match[2], 10);
+  if (hours > 23 || minutes > 59) {
+    return default_start_time;
+  }
+
+  return { hours, minutes };
+}
+
+/**
+ * Builds the local start moment from the race date and start time. A missing or unreadable
+ * race date means today.
+ */
+export function build_run_start_date(settings: PlanSettings): Date {
+  const race_date_match = /^(\d{4})-(\d{2})-(\d{2})$/.exec(settings.race_date_string.trim());
+  const today = new Date();
+  const year = race_date_match ? parseInt(race_date_match[1], 10) : today.getFullYear();
+  const month_index = race_date_match ? parseInt(race_date_match[2], 10) - 1 : today.getMonth();
+  const day_of_month = race_date_match ? parseInt(race_date_match[3], 10) : today.getDate();
+
+  const start_time_parts = parse_start_time_parts(settings.start_time_string);
+  return new Date(year, month_index, day_of_month, start_time_parts.hours, start_time_parts.minutes, 0, 0);
+}
+
+/**
+ * Reads a "YYYY-MM-DDTHH:MM" cut-off into a local Date. Returns null when it is blank or unreadable.
+ */
+export function parse_cutoff_datetime(cutoff_datetime_string: string | undefined): Date | null {
+  if (!cutoff_datetime_string) {
+    return null;
+  }
+  const cutoff_match = /^(\d{4})-(\d{2})-(\d{2})T(\d{2}):(\d{2})$/.exec(cutoff_datetime_string.trim());
+  if (!cutoff_match) {
+    return null;
+  }
+  return new Date(
+    parseInt(cutoff_match[1], 10),
+    parseInt(cutoff_match[2], 10) - 1,
+    parseInt(cutoff_match[3], 10),
+    parseInt(cutoff_match[4], 10),
+    parseInt(cutoff_match[5], 10),
+    0,
+    0
+  );
 }
 
 /**
@@ -89,36 +172,68 @@ export function find_closest_track_point(
 }
 
 /**
- * Calculates safety estimations and arrival windows for a list of checkpoints.
+ * Works out the elapsed minutes at a track point: flat pace, then the climb and descent allowances,
+ * then any stops at checkpoints passed before it. The table, hover readout and SMS payload all use this.
+ */
+export function calculate_elapsed_minutes_at_point(
+  track_point: ParsedTrackPoint,
+  settings: PlanSettings,
+  stop_minutes_before_point: number
+): number {
+  const flat_terrain_minutes = (track_point.cumulative_distance_meters / 1000) * settings.base_pace_minutes_per_kilometer;
+  const ascent_delay_minutes = (track_point.cumulative_gain_meters / 100) * settings.ascent_penalty_minutes_per_hundred_meters;
+  const descent_delay_minutes = (track_point.cumulative_loss_meters / 100) * settings.descent_time_minutes_per_hundred_meters;
+  return flat_terrain_minutes + ascent_delay_minutes + descent_delay_minutes + stop_minutes_before_point;
+}
+
+/**
+ * Converts elapsed minutes into the runner's clock time. Minutes are rounded first, so the ETA
+ * and the elapsed time shown next to it always agree. A "(+Nd)" marker is added past midnight.
+ */
+export function calculate_arrival_eta_string(settings: PlanSettings, elapsed_minutes: number): string {
+  const run_start_date_object = build_run_start_date(settings);
+  const arrival_date_object = new Date(run_start_date_object.getTime() + Math.round(elapsed_minutes) * 60 * 1000);
+  return format_timestamp_to_eta_string(run_start_date_object, arrival_date_object);
+}
+
+/**
+ * Compares an arrival with a cut-off. Slack is minutes to spare, negative when the cut-off was missed.
+ */
+export function evaluate_cutoff(
+  arrival_date_object: Date,
+  cutoff_datetime_string: string | undefined
+): { cutoff_status: CutoffStatus; slack_minutes: number | null } {
+  const cutoff_date_object = parse_cutoff_datetime(cutoff_datetime_string);
+  if (!cutoff_date_object) {
+    return { cutoff_status: "none", slack_minutes: null };
+  }
+
+  const slack_minutes = Math.round((cutoff_date_object.getTime() - arrival_date_object.getTime()) / 60000);
+  if (slack_minutes < 0) {
+    return { cutoff_status: "missed", slack_minutes };
+  }
+  if (slack_minutes <= tight_cutoff_margin_minutes) {
+    return { cutoff_status: "tight", slack_minutes };
+  }
+  return { cutoff_status: "ok", slack_minutes };
+}
+
+/**
+ * Calculates safety estimations, arrival windows and cut-off slack for a list of checkpoints.
+ * Stops are applied in distance order, so each checkpoint's ETA includes the stops before it.
  */
 export function calculate_checkpoint_estimates(
   parsed_gpx_data: ParsedGpxData,
   user_checkpoints: UserCheckpoint[],
-  base_pace_minutes_per_kilometer: number,
-  ascent_penalty_minutes_per_hundred_meters: number,
-  start_time_string: string
+  settings: PlanSettings
 ): CalculatedCheckpointDetails[] {
   const sorted_checkpoints = [...user_checkpoints].sort(
     (first, second) => first.distance_kilometers - second.distance_kilometers
   );
 
-  // Parse start time "HH:MM" into a Date object representing today
-  const current_date = new Date();
-  const start_time_parts = start_time_string.split(":");
-  const start_hours = start_time_parts[0] ? parseInt(start_time_parts[0], 10) : 8;
-  const start_minutes = start_time_parts[1] ? parseInt(start_time_parts[1], 10) : 0;
-
-  const run_start_date_object = new Date(
-    current_date.getFullYear(),
-    current_date.getMonth(),
-    current_date.getDate(),
-    start_hours,
-    start_minutes,
-    0,
-    0
-  );
-
+  const run_start_date_object = build_run_start_date(settings);
   const calculated_details_list: CalculatedCheckpointDetails[] = [];
+  let stop_minutes_before_checkpoint = 0;
 
   for (let index = 0; index < sorted_checkpoints.length; index++) {
     const checkpoint = sorted_checkpoints[index];
@@ -127,22 +242,17 @@ export function calculate_checkpoint_estimates(
     // Retrieve geographical parameters at this distance checkpoint
     const matching_point = find_closest_track_point(parsed_gpx_data.track_points, target_distance_meters);
 
-    // Calculate duration details
-    const flat_terrain_duration_minutes =
-      (matching_point.cumulative_distance_meters / 1000) * base_pace_minutes_per_kilometer;
-
-    const elevation_gain_hundreds_of_meters = matching_point.cumulative_gain_meters / 100;
-    const elevation_delay_duration_minutes =
-      elevation_gain_hundreds_of_meters * ascent_penalty_minutes_per_hundred_meters;
-
-    const total_elapsed_duration_minutes = flat_terrain_duration_minutes + elevation_delay_duration_minutes;
-
-    // Calculate the absolute arrival time date object
-    const arrival_date_object = new Date(
-      run_start_date_object.getTime() + total_elapsed_duration_minutes * 60 * 1000
+    const elapsed_minutes_at_arrival = calculate_elapsed_minutes_at_point(
+      matching_point,
+      settings,
+      stop_minutes_before_checkpoint
     );
+    const arrival_date_object = new Date(
+      run_start_date_object.getTime() + Math.round(elapsed_minutes_at_arrival) * 60 * 1000
+    );
+    const { cutoff_status, slack_minutes } = evaluate_cutoff(arrival_date_object, checkpoint.cutoff_datetime_string);
 
-    const eta_time_string = format_timestamp_to_eta_string(run_start_date_object, arrival_date_object);
+    const stop_minutes = Math.max(0, checkpoint.stop_minutes ?? 0);
 
     calculated_details_list.push({
       id: checkpoint.id,
@@ -151,9 +261,15 @@ export function calculate_checkpoint_estimates(
       elevation_meters: Math.round(matching_point.elevation_meters),
       cumulative_gain_meters: Math.round(matching_point.cumulative_gain_meters),
       cumulative_loss_meters: Math.round(matching_point.cumulative_loss_meters),
-      elapsed_time_minutes: Math.round(total_elapsed_duration_minutes),
-      eta_time_string,
+      elapsed_time_minutes: Math.round(elapsed_minutes_at_arrival),
+      stop_minutes,
+      eta_time_string: calculate_arrival_eta_string(settings, elapsed_minutes_at_arrival),
+      cutoff_status,
+      slack_minutes,
     });
+
+    // The stop happens after arrival, so it moves only the checkpoints that come later
+    stop_minutes_before_checkpoint += stop_minutes;
   }
 
   return calculated_details_list;

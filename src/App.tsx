@@ -14,43 +14,70 @@
     You should have received a copy of the GNU General Public License
     along with this program.  If not, see <https://www.gnu.org/licenses/>. */
 
-import { HashRouter, Routes, Route } from "react-router-dom";
+import { lazy, Suspense } from "react";
+import { HashRouter, Routes, Route } from "react-router";
 import MainDashboard from "./components/MainDashboard";
-import PlanGenerator from "./components/PlanGenerator";
+import { SettingsProvider } from "./i18n/SettingsProvider";
+import { useSettings } from "./i18n/settings_context";
+
+// The planner and the PDF library it uses load on demand, so the upload screen starts faster
+const PlanGenerator = lazy(() => import("./components/PlanGenerator"));
 
 /**
- * The main application component that sets up the layout wrapper and
- * maps URL hash paths to specific components.
+ * The layout, routes and footer. Reads the language from the settings provider above it.
  */
-export default function App() {
+function AppShell() {
+  const { t } = useSettings();
+
   return (
     // HashRouter matches paths after the "#" symbol in the URL.
     // This ensures that page reloads work offline and on static backends
     // without raising 404 routing errors.
     <HashRouter>
       <div className="min-h-screen transition-colors duration-300 flex flex-col justify-between">
-        
+
         {/* Core routing dashboard viewports */}
         <main className="flex-grow">
           <Routes>
             <Route path="/" element={<MainDashboard />} />
-            <Route path="/planner" element={<PlanGenerator />} />
+            <Route
+              path="/planner"
+              element={
+                <Suspense
+                  fallback={
+                    <div className="flex items-center justify-center min-h-[50vh]">
+                      <div className="text-lg text-zinc-500 dark:text-zinc-400">{t("app_loading_planner")}</div>
+                    </div>
+                  }
+                >
+                  <PlanGenerator />
+                </Suspense>
+              }
+            />
           </Routes>
         </main>
 
         {/* Minimalist monochromatic footer element */}
-        <footer className="py-6 text-center text-xs text-zinc-400 dark:text-zinc-600 border-t border-zinc-200/50 dark:border-zinc-800/50 mt-12 bg-white/20 dark:bg-black/10 backdrop-blur-sm">
+        <footer className="py-6 text-center text-xs text-zinc-500 dark:text-zinc-400 border-t border-zinc-200/50 dark:border-zinc-800/50 mt-12 bg-white/20 dark:bg-black/10 backdrop-blur-sm">
           <div className="max-w-6xl mx-auto px-4 flex flex-col sm:flex-row items-center justify-between gap-2">
-            <span>
-              RaceSafe &copy; 2026. Free Software under the GNU GPL v3 License.
-            </span>
-            <span className="font-light">
-              Running 100% locally in browser memory. Offline active.
-            </span>
+            <span>{t("app_footer_license")}</span>
+            <span className="font-light">{t("app_footer_local")}</span>
           </div>
         </footer>
 
       </div>
     </HashRouter>
+  );
+}
+
+/**
+ * The main application component. The settings provider wraps the whole app so every screen
+ * shares the language and unit choices.
+ */
+export default function App() {
+  return (
+    <SettingsProvider>
+      <AppShell />
+    </SettingsProvider>
   );
 }

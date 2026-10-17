@@ -18,6 +18,10 @@ import { StrictMode } from 'react';
 import { createRoot } from 'react-dom/client';
 import './index.css';
 import App from './App.tsx';
+import { apply_theme_to_document, get_initial_theme_preference } from './utils/theme_preference';
+
+// Apply the saved or system theme before the first render, so every page starts in the right theme
+apply_theme_to_document(get_initial_theme_preference());
 
 // Find the target mount node in index.html
 const target_root_element = document.getElementById('root');
@@ -31,11 +35,12 @@ if (target_root_element) {
 }
 
 // Register the offline Service Worker if supported by the browser engine.
+// Production only: in development the cache would serve stale modules during hot reload.
 // This executes during window load to avoid blocking critical initial page render assets.
-if ('serviceWorker' in navigator) {
+if ('serviceWorker' in navigator && import.meta.env.PROD) {
   window.addEventListener('load', () => {
     const service_worker_url = `${import.meta.env.BASE_URL}service_worker.js`;
-    
+
     navigator.serviceWorker.register(service_worker_url)
       .then((registration_object) => {
         // Service worker registered successfully
