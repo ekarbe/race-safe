@@ -1,0 +1,18 @@
+version: 2
+updates:
+  # Keeps npm packages current with weekly grouped pull requests
+  - package-ecosystem: "npm"
+    directory: "/"
+    schedule:
+      interval: "weekly"
+    groups:
+      minor-and-patch:
+        update-types:
+          - "minor"
+          - "patch"
+
+  # Keeps the GitHub Actions used in the workflows current
+  - package-ecosystem: "github-actions"
+    directory: "/"
+    schedule:
+      interval: "weekly"
